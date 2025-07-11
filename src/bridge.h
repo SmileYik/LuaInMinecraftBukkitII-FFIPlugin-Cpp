@@ -1,13 +1,13 @@
 #ifndef __BRIDGE_H
 #define __BRIDGE_H
 
+#include <cstdint>
 #include <jni.h>
 #include <ffi_init.h>
-#include <cstdint> 
+#include <list>
 #include <memory>
 #include <string>
 #include <any>
-#include <vector>
 
 
 class JObject;
@@ -28,12 +28,12 @@ public:
 
     template<typename... Args>
     std::shared_ptr<JObject> operator()(Args&&... args) const {
-        std::vector<std::any> params;
+        std::list<std::any> params;
         (params.push_back(std::forward<Args>(args)), ...);
         return call(params);
     }
 private:
-    std::shared_ptr<JObject> call(const std::vector<std::any>& params) const;
+    std::shared_ptr<JObject> call(std::list<std::any>& params) const;
 };
 
 class JObject {
@@ -45,17 +45,8 @@ public:
     JObjectProxy get(const std::string& name);
     std::string toString();
     std::string toString(JNIEnv* env);
+public:
+    std::string operator+(std::string str);
+    std::string operator+(JObject obj);
 };
-
-jobject toJavaByte(JNIEnv* env, int8_t value);
-jobject toJavaShort(JNIEnv* env, int16_t value);
-jobject toJavaInteger(JNIEnv* env, int32_t value);
-jobject toJavaLong(JNIEnv* env, int64_t value);
-jobject toJavaFloat(JNIEnv* env, float value);
-jobject toJavaDouble(JNIEnv* env, double value);
-jobject toJavaBoolean(JNIEnv* env, bool value);
-jobject toJavaCharacter(JNIEnv* env, char16_t value);
-const char* fromJavaString(JNIEnv* env, jstring jstr);
-jstring toJavaString(JNIEnv* env, const char* str);
-jobject call(JNIEnv* env, jobject obj, const char* method, const char* paramsType, ...);
 #endif // __BRIDGE_H

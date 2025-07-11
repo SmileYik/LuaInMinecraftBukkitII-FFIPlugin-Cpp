@@ -5,6 +5,11 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+if(ENABLE_DEBUG)
+    message(STATUS "Enable Debug")
+    add_compile_definitions(ENABLE_DEBUG)
+endif()
+
 find_package(JNI REQUIRED)
 if (JNI_FOUND)
     message(STATUS "JNI Found:") 
@@ -18,6 +23,7 @@ set(PROJECT_SOURCES
     src/ffi_init.cpp
     src/plugin.cpp
     src/bridge.cpp
+    src/jni_bridge.cpp
 )
 set(PROJECT_INCLUDE_DIRECTORIES
     src

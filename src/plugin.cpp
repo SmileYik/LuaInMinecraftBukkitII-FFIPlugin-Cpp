@@ -1,6 +1,9 @@
 #include "plugin.h"
 #include "bridge.h"
+#include "ffi_init.h"
 #include "jni.h"
+#include <memory>
+#include <vector>
 
 void onPluginEnable(JNIEnv *jniEnv, _LuaBukkit* luaBukkit) {
     // TODO write your code
@@ -8,12 +11,17 @@ void onPluginEnable(JNIEnv *jniEnv, _LuaBukkit* luaBukkit) {
     obj->get("info")("阿巴阿巴");
     obj->get("info")("abc");
     obj->get("info")(jniEnv, "abc");
-    jobject abc[] = {obj->instance};
-    int def[] = {1, 2, 3};
-    obj->get("info")(jniEnv, abc, def);
-    obj->get("info")(obj->toString());
 }
 
 void onPluginDisable(JNIEnv *jniEnv) {
     // TODO clean your code
+}
+
+extern "C" void onPlayerJoin(JNIEnv *jniEnv, void* eventPtr) {
+    JObject* obj = new JObject(*getLuaBukkit()->log);
+    obj->get("info")("阿巴阿巴");
+    JObject event(*((jobject *) eventPtr));
+    std::shared_ptr<JObject> player = event.get("getPlayer")();
+    player->get("sendMessage")("Hello, " + player->get("getName")()->toString() + 
+                                        "!\n This message from a shared dynamic library!");
 }
