@@ -1,8 +1,10 @@
 #include "ffi_init.h"
 #include "ffi_type.h"
+#include "jni.h"
 #include "plugin.h"
 
 static _LuaBukkit _luaBukkit;
+static JavaVM* javaVM;
 
 void onEnable(void *jniEnv, LuaBukkit luaBukkit) {
     _luaBukkit.env    = (jobject *) luaBukkit.env;
@@ -14,6 +16,11 @@ void onEnable(void *jniEnv, LuaBukkit luaBukkit) {
     _luaBukkit.log    = (jobject *) luaBukkit.log;
     _luaBukkit.out    = (jobject *) luaBukkit.out;
 
+
+    if (JNI_OK != ((JNIEnv *) jniEnv)->GetJavaVM(&javaVM)) {
+        javaVM = nullptr;
+    }
+    
     onPluginEnable((JNIEnv *) jniEnv, &_luaBukkit);
 }
 
@@ -32,4 +39,23 @@ void onDisable(void *jniEnv) {
 
 _LuaBukkit* getLuaBukkit() {
     return &_luaBukkit;
+}
+
+JNIEnv* getJNIEnv() {
+    if (nullptr == javaVM) {
+        return nullptr;
+    }
+    JNIEnv* env;
+    if (JNI_OK == javaVM->GetEnv((void**) &env, TARGET_JNI_VERSION)) {
+        return env;
+    } else if (JNI_OK == javaVM->AttachCurrentThread((void**) &env, nullptr)) {
+        return env;
+    }
+    return nullptr;
+}
+
+void destroyJNIEnv() {
+    if (nullptr != javaVM) {
+        javaVM->DetachCurrentThread();
+    }
 }

@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.15)
 project(ffi-plugin VERSION 1.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(JNI REQUIRED)
 if (JNI_FOUND)
-    message(STATUS "JNI Found:")
+    message(STATUS "JNI Found:") 
     message(STATUS "  JAVA_INCLUDE_PATH: ${JAVA_INCLUDE_PATH}")
     message(STATUS "  JAVA_INCLUDE_PATH_2: ${JAVA_INCLUDE_PATH2}")
 else()

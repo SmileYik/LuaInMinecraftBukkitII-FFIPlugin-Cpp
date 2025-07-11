@@ -2,21 +2,50 @@
 #define __BRIDGE_H
 
 #include <jni.h>
+#include <ffi_init.h>
 #include <cstdint> 
+#include <memory>
 #include <string>
+#include <any>
+#include <vector>
 
-/*
-b: byte
-s: short
-i: int
-j: long
-f: float
-d: double
-z: boolean
-c: char
-t: string
-o: jobject
-*/
+
+class JObject;
+class JObjectProxy;
+enum JObjectProxyType {
+    Field,
+    Method,
+    Constructor
+};
+
+class JObjectProxy {
+private:
+    const jobject instance;
+    const JObjectProxyType proxyType;
+    std::string name;
+public:
+    JObjectProxy(jobject obj, JObjectProxyType pxyType, const std::string& calledName);
+
+    template<typename... Args>
+    std::shared_ptr<JObject> operator()(Args&&... args) const {
+        std::vector<std::any> params;
+        (params.push_back(std::forward<Args>(args)), ...);
+        return call(params);
+    }
+private:
+    std::shared_ptr<JObject> call(const std::vector<std::any>& params) const;
+};
+
+class JObject {
+public:
+    const jobject instance;
+public:
+    JObject(jobject object);
+public:
+    JObjectProxy get(const std::string& name);
+    std::string toString();
+    std::string toString(JNIEnv* env);
+};
 
 jobject toJavaByte(JNIEnv* env, int8_t value);
 jobject toJavaShort(JNIEnv* env, int16_t value);

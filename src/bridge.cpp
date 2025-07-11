@@ -1,6 +1,10 @@
 #include "bridge.h"
+#include "ffi_init.h"
 #include "jni.h"
 #include <cstdarg>
+#include <cstddef>
+#include <cstdio>
+#include <memory>
 
 void checkJNIException(JNIEnv* env) {
     if (env->ExceptionCheck()) {
@@ -306,4 +310,151 @@ jobject call(JNIEnv* env, jobject obj, const char* method, const char* paramsTyp
     env->DeleteLocalRef(javaParamsArray);
 
     return result;
+}
+
+JObjectProxy::JObjectProxy(jobject obj, 
+                           JObjectProxyType pxyType, 
+                           const std::string& calledName) : 
+                           instance(obj),
+                           proxyType(pxyType),
+                           name(calledName) {
+    
+}
+
+JObject::JObject(jobject obj) : instance(obj) {
+
+}
+
+JObjectProxy JObject::get(const std::string& name) {
+    return JObjectProxy(instance, JObjectProxyType::Method, name);
+}
+
+std::string JObject::toString() {
+    JNIEnv* env = getJNIEnv();
+    std::string result = toString(env);
+    destroyJNIEnv();
+    return nullptr == env ? "" : result;
+}
+
+std::string JObject::toString(JNIEnv* env) {
+    jclass objectClass = env->FindClass("java/lang/Object");
+    if (!objectClass) {
+        checkJNIException(env);
+        return "";
+    }
+    jmethodID methodId = env->GetMethodID(objectClass, "toString", "()Ljava/lang/String;");
+    jstring ret = (jstring) env->CallObjectMethod(instance, methodId);
+    const char* str = fromJavaString(env, ret);
+    std::string retStr = std::string(str);
+    return retStr;
+}
+
+bool cParams2JavaParams(JNIEnv* env, const std::vector<std::any>& params, const size_t paramCount, const size_t base, std::vector<jobject>& localParamRefs, jobjectArray& javaParams) {
+    jclass objectClass = env->FindClass("java/lang/Object");
+    if (!objectClass) {
+        checkJNIException(env);
+        return false;
+    }
+    localParamRefs.push_back(objectClass);
+
+    size_t idx = base;
+    javaParams = env->NewObjectArray(paramCount - idx, objectClass, nullptr);
+    localParamRefs.push_back(javaParams);
+    while (idx < paramCount) {
+        std::any param = params[idx];
+        jobject javaParam = nullptr;
+        
+        try {
+            javaParam = std::any_cast<jobject>(param);
+        } catch (const std::bad_any_cast& e) {
+            if (param.has_value()) {
+                printf("--- '%s' '%d'---\n", param.type().name(), 1);
+                fflush(stdout);
+                if (param.type() == typeid(int8_t)) {
+                    javaParam = toJavaByte(env, std::any_cast<int8_t>(param));
+                } else if (param.type() == typeid(int16_t)) {
+                    javaParam = toJavaShort(env, std::any_cast<int16_t>(param));
+                } else if (param.type() == typeid(int32_t)) {
+                    javaParam = toJavaInteger(env, std::any_cast<int32_t>(param));
+                } else if (param.type() == typeid(int64_t)) {
+                    javaParam = toJavaLong(env, std::any_cast<int64_t>(param));
+                } else if (param.type() == typeid(bool)) {
+                    javaParam = toJavaBoolean(env, std::any_cast<bool>(param));
+                } else if (param.type() == typeid(char16_t)) {
+                    javaParam = toJavaCharacter(env, std::any_cast<char16_t>(param));
+                } else if (param.type() == typeid(float)) {
+                    javaParam = toJavaFloat(env, std::any_cast<float>(param));
+                } else if (param.type() == typeid(double)) {
+                    javaParam = toJavaDouble(env, std::any_cast<double>(param));
+                } else if (param.type() == typeid(std::string)) {
+                    javaParam = toJavaString(env, std::any_cast<std::string>(param).c_str());
+                } else if (param.type() == typeid(const char *)) {
+                    javaParam = toJavaString(env, std::any_cast<const char *>(param));
+                }
+
+                if (nullptr != javaParam) {
+                    localParamRefs.push_back(javaParam);
+                }
+            }
+        }
+        env->SetObjectArrayElement(javaParams, idx - base, javaParam);
+        checkJNIException(env); 
+        idx += 1;
+    }
+    return true;
+}
+
+std::shared_ptr<JObject> JObjectProxy::call(const std::vector<std::any>& params) const {
+    JNIEnv* env = nullptr;
+    size_t paramCount = params.size();
+    size_t idx = 0;
+
+    if (paramCount > 0) {
+        std::any first = params[0];
+        if (first.type() == typeid(JNIEnv*)) {
+            env = std::any_cast<JNIEnv*>(first);
+            idx = 1;
+        }
+    }
+    if (nullptr == env) {
+        env = getJNIEnv();
+    }
+    if (nullptr == env) {
+        return nullptr;
+    }
+
+    jclass nativeBridgeClass = env->FindClass("org/eu/smileyik/luaInMinecraftBukkitII/reflect/ReflectUtil");
+    if (!nativeBridgeClass) {
+        checkJNIException(env);
+        return nullptr;
+    }
+    jmethodID javaCallMethodID = env->GetStaticMethodID(
+        nativeBridgeClass, "callMethod", "(Ljava/lang/Object;Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/Object;");
+    if (!javaCallMethodID) {
+        checkJNIException(env);
+        env->DeleteLocalRef(nativeBridgeClass);
+        return nullptr;
+    }
+    jobjectArray javaParams;
+    std::vector<jobject> localParamRefs;
+    localParamRefs.push_back(nativeBridgeClass);
+
+    if (!cParams2JavaParams(env, params, paramCount, idx, localParamRefs, javaParams)) {
+        for (auto begin = localParamRefs.begin(),
+                    end = localParamRefs.end(); begin != end; begin += 1) {
+            env->DeleteLocalRef(*begin);
+        }
+    }
+    
+
+    jobject result = env->CallStaticObjectMethod(nativeBridgeClass, javaCallMethodID,
+                                                instance, toJavaString(env, name.c_str()), javaParams);
+    checkJNIException(env);
+
+    for (auto begin = localParamRefs.begin(),
+                end = localParamRefs.end(); begin != end; begin += 1) {
+        env->DeleteLocalRef(*begin);
+    }
+    destroyJNIEnv();
+    return nullptr;
 }

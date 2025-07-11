@@ -14,6 +14,8 @@
     #define FFI_BRIDGE_API
 #endif
 
+#define TARGET_JNI_VERSION JNI_VERSION_1_8
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -29,5 +31,9 @@ void onDisable(void *jniEnv);
 #endif
 
 _LuaBukkit* getLuaBukkit();
+
+JNIEnv* getJNIEnv();
+
+void destroyJNIEnv();
 
 #endif // __FFI_INIT_H
