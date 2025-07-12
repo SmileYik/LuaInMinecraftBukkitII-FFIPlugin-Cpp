@@ -1,7 +1,5 @@
 #include "bridge.h"
-#include "ffi_init.h"
 #include "jni.h"
-#include <memory>
 #include "jni_bridge.h"
 
 JObjectProxy::JObjectProxy(jobject obj, 
@@ -22,7 +20,7 @@ JObjectProxy JObject::get(const std::string& name) {
 }
 
 std::string JObject::toString() {
-    JNIEnv* env = getJNIEnv();
+    JNIEnv* env = getCurrentJNIEnv();
     std::string result = toString(env);
     destroyJNIEnv();
     return nullptr == env ? "" : result;
@@ -32,7 +30,7 @@ std::string JObject::toString(JNIEnv* env) {
     return javaObject2String(env, instance);
 }
 
-std::shared_ptr<JObject> JObjectProxy::call(std::list<std::any>& params) const {
+JObject JObjectProxy::call(std::list<std::any>& params) const {
     return javaCallMethod(nullptr, instance, name, params);
 }
 
@@ -41,7 +39,7 @@ std::string JObject::operator+(std::string str) {
 }
 
 std::string JObject::operator+(JObject obj) {
-    JNIEnv* env = getJNIEnv();
+    JNIEnv* env = getCurrentJNIEnv();
     if (env == nullptr) return "";
     std::string ret = toString(env) + obj.toString(env);
     destroyJNIEnv();

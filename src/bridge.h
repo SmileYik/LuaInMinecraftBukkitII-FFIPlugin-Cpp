@@ -1,39 +1,19 @@
 #ifndef __BRIDGE_H
 #define __BRIDGE_H
 
-#include <cstdint>
 #include <jni.h>
-#include <ffi_init.h>
 #include <list>
-#include <memory>
 #include <string>
 #include <any>
+#include "config.h"
 
+struct JObject;
+struct JObjectProxy;
 
-class JObject;
-class JObjectProxy;
 enum JObjectProxyType {
     Field,
     Method,
     Constructor
-};
-
-class JObjectProxy {
-private:
-    const jobject instance;
-    const JObjectProxyType proxyType;
-    std::string name;
-public:
-    JObjectProxy(jobject obj, JObjectProxyType pxyType, const std::string& calledName);
-
-    template<typename... Args>
-    std::shared_ptr<JObject> operator()(Args&&... args) const {
-        std::list<std::any> params;
-        (params.push_back(std::forward<Args>(args)), ...);
-        return call(params);
-    }
-private:
-    std::shared_ptr<JObject> call(std::list<std::any>& params) const;
 };
 
 class JObject {
@@ -49,4 +29,23 @@ public:
     std::string operator+(std::string str);
     std::string operator+(JObject obj);
 };
+
+class JObjectProxy {
+private:
+    const jobject instance;
+    const JObjectProxyType proxyType;
+    std::string name;
+public:
+    JObjectProxy(jobject obj, JObjectProxyType pxyType, const std::string& calledName);
+
+    template<typename... Args>
+    JObject operator()(Args&&... args) const {
+        std::list<std::any> params;
+        (params.push_back(std::forward<Args>(args)), ...);
+        return JObject(call(params));
+    }
+private:
+    JObject call(std::list<std::any>& params) const;
+};
+
 #endif // __BRIDGE_H

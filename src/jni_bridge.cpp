@@ -9,9 +9,14 @@
 #include <any>
 #include <memory>
 #include "jni_bridge.h"
-#include "ffi_init.h"
+#include "jni_bridge_data.h"
 #include "bridge.h"
 #include "debug.h"
+
+// set jni version to 1.8
+#ifndef TARGET_JNI_VERSION
+#define TARGET_JNI_VERSION JNI_VERSION_1_8
+#endif
 
 #define TO_JAVA_ARRAY(ENV, SIZE, OBJECT_TYPE, CODE) \
     jclass objectClass = OBJECT_TYPE; \
@@ -54,20 +59,69 @@
     } \
     VEC.clear()
 
-#define LIST_TO_ARRAY(TYPE, SIZE, LIST) \
-    TYPE typeArr[SIZE]; \
-    size_t i = 0; \
-    while (!LIST.empty()) { \
-        typeArr[i] = LIST.front(); \
-        LIST.pop_front(); \
-    }
+#ifdef _WIN32
+    #define LIST_TO_ARRAY(TYPE, SIZE, LIST) \
+        std::vector<TYPE> typeVec; \
+        typeVec.resize(SIZE); \
+        while (!LIST.empty()) { \
+            typeVec.push_back(LIST.front()); \
+            LIST.pop_front(); \
+        } \
+        TYPE* typeArr = typeVec.data();
 
-#define VECTOR_TO_ARRAY(TYPE, SIZE, VEC) \
-    TYPE typeArr[SIZE]; \
-    for (size_t i = 0; i < SIZE; ++i) { \
-        typeArr[i] = VEC[i]; \
-    } \
-    VEC.clear();
+    #define VECTOR_TO_ARRAY(TYPE, SIZE, VEC) \
+        std::vector<TYPE> typeVec; \
+        typeVec.resize(SIZE); \
+        for (size_t i = 0; i < SIZE; ++i) { \
+            typeVec.push_back(VEC[i]); \
+        } \
+        VEC.clear(); \
+        TYPE* typeArr = typeVec.data();
+#else
+    #define LIST_TO_ARRAY(TYPE, SIZE, LIST) \
+        TYPE typeArr[SIZE]; \
+        size_t i = 0; \
+        while (!LIST.empty()) { \
+            typeArr[i++] = LIST.front(); \
+            LIST.pop_front(); \
+        }
+
+    #define VECTOR_TO_ARRAY(TYPE, SIZE, VEC) \
+        TYPE typeArr[SIZE]; \
+        for (size_t i = 0; i < SIZE; ++i) { \
+            typeArr[i] = VEC[i]; \
+        } \
+        VEC.clear();
+#endif
+
+// --- JNIEnv 操作 ---
+
+static JavaVM* javaVM;
+
+void initJNIEnv(JNIEnv* env) {
+    if (JNI_OK != env->GetJavaVM(&javaVM)) {
+        javaVM = nullptr;
+    }
+}
+
+JNIEnv* getCurrentJNIEnv() {
+    if (nullptr == javaVM) {
+        return nullptr;
+    }
+    JNIEnv* env;
+    if (JNI_OK == javaVM->GetEnv((void**) &env, TARGET_JNI_VERSION)) {
+        return env;
+    } else if (JNI_OK == javaVM->AttachCurrentThread((void**) &env, nullptr)) {
+        return env;
+    }
+    return nullptr;
+}
+
+void destroyJNIEnv() {
+    if (nullptr != javaVM) {
+        javaVM->DetachCurrentThread();
+    }
+}
 
 void checkJNIException(JNIEnv* env) {
     if (env->ExceptionCheck()) {
@@ -277,7 +331,7 @@ std::string fromJavaString(JNIEnv* env, jstring jstr) {
 
 // --- 数组类型转换 ---
 
-jobject toJavaArray(JNIEnv* env, std::list<JObject> objs) {
+jobject wrapperObjectListToJavaArray(JNIEnv* env, std::list<JObject> objs) {
     DEBUG << "[jni bridge] to java object array\n";
     size_t size = objs.size();
     jclass clazz = nullptr;
@@ -296,7 +350,7 @@ jobject toJavaArray(JNIEnv* env, std::list<JObject> objs) {
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::vector<JObject> objs) {
+jobject wrapperObjectVectorToJavaArray(JNIEnv* env, std::vector<JObject> objs) {
     DEBUG << "[jni bridge] to java object array.\n";
     size_t size = objs.size();
     jclass clazz = nullptr;
@@ -315,7 +369,7 @@ jobject toJavaArray(JNIEnv* env, std::vector<JObject> objs) {
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::list<jobject> objs) {
+jobject jobjectListToJavaArray(JNIEnv* env, std::list<jobject> objs) {
     DEBUG << "[jni bridge] to java object array\n";
     size_t size = objs.size();
     jclass clazz = nullptr;
@@ -334,7 +388,7 @@ jobject toJavaArray(JNIEnv* env, std::list<jobject> objs) {
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::vector<jobject> objs) {
+jobject jobjectVectorToJavaArray(JNIEnv* env, std::vector<jobject> objs) {
     DEBUG << "[jni bridge] to java object array\n";
     size_t size = objs.size();
     jclass clazz = nullptr;
@@ -353,7 +407,7 @@ jobject toJavaArray(JNIEnv* env, std::vector<jobject> objs) {
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::list<std::string> objs, std::list<jobject>& localParamRefs) {
+jobject stringListToJavaArray(JNIEnv* env, std::list<std::string> objs, std::list<jobject>& localParamRefs) {
     DEBUG << "[jni bridge] to java string array\n";
     size_t size = objs.size();
     TO_JAVA_ARRAY(env, size, env->FindClass("java/lang/String"), {
@@ -364,7 +418,7 @@ jobject toJavaArray(JNIEnv* env, std::list<std::string> objs, std::list<jobject>
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::vector<std::string> objs, std::list<jobject>& localParamRefs) {
+jobject stringVectorToJavaArray(JNIEnv* env, std::vector<std::string> objs, std::list<jobject>& localParamRefs) {
     DEBUG << "[jni bridge] to java string array\n";
     size_t size = objs.size();
     TO_JAVA_ARRAY(env, size, env->FindClass("java/lang/String"), {
@@ -375,7 +429,7 @@ jobject toJavaArray(JNIEnv* env, std::vector<std::string> objs, std::list<jobjec
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::list<const char *> objs, std::list<jobject>& localParamRefs) {
+jobject cstringListToJavaArray(JNIEnv* env, std::list<const char *> objs, std::list<jobject>& localParamRefs) {
     DEBUG << "[jni bridge] to java string array\n";
     size_t size = objs.size();
     TO_JAVA_ARRAY(env, size, env->FindClass("java/lang/String"), {
@@ -386,7 +440,7 @@ jobject toJavaArray(JNIEnv* env, std::list<const char *> objs, std::list<jobject
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::vector<const char *> objs, std::list<jobject>& localParamRefs) {
+jobject cstringVectorToJavaArray(JNIEnv* env, std::vector<const char *> objs, std::list<jobject>& localParamRefs) {
     DEBUG << "[jni bridge] to java string array\n";
     size_t size = objs.size();
     TO_JAVA_ARRAY(env, size, env->FindClass("java/lang/String"), {
@@ -397,7 +451,7 @@ jobject toJavaArray(JNIEnv* env, std::vector<const char *> objs, std::list<jobje
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::list<int8_t> objs) {
+jobject int8ListToJavaArray(JNIEnv* env, std::list<int8_t> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jbyteArray, NewByteArray, {
         LIST_TO_ARRAY(int8_t, size, objs);
@@ -405,14 +459,14 @@ jobject toJavaArray(JNIEnv* env, std::list<int8_t> objs) {
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::vector<int8_t> objs) {
+jobject int8VectorToJavaArray(JNIEnv* env, std::vector<int8_t> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jbyteArray, NewByteArray, {
         env->SetByteArrayRegion(array, 0, size, objs.data());
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::list<bool> objs) {
+jobject boolListToJavaArray(JNIEnv* env, std::list<bool> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jbooleanArray, NewBooleanArray, {
         LIST_TO_ARRAY(jboolean, size, objs);
@@ -420,7 +474,7 @@ jobject toJavaArray(JNIEnv* env, std::list<bool> objs) {
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::vector<bool> objs) {
+jobject boolVectorToJavaArray(JNIEnv* env, std::vector<bool> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jbooleanArray, NewBooleanArray, {
         VECTOR_TO_ARRAY(jboolean, size, objs)
@@ -428,7 +482,7 @@ jobject toJavaArray(JNIEnv* env, std::vector<bool> objs) {
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::list<char16_t> objs) {
+jobject charListToJavaArray(JNIEnv* env, std::list<char16_t> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jcharArray, NewCharArray, {
         LIST_TO_ARRAY(jchar, size, objs);
@@ -436,7 +490,7 @@ jobject toJavaArray(JNIEnv* env, std::list<char16_t> objs) {
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::vector<char16_t> objs) {
+jobject charVectorToJavaArray(JNIEnv* env, std::vector<char16_t> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jcharArray, NewCharArray, {
         VECTOR_TO_ARRAY(jchar, size, objs);
@@ -444,7 +498,7 @@ jobject toJavaArray(JNIEnv* env, std::vector<char16_t> objs) {
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::list<int16_t> objs) {
+jobject int16ListToJavaArray(JNIEnv* env, std::list<int16_t> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jshortArray, NewShortArray, {
         LIST_TO_ARRAY(int16_t, size, objs);
@@ -452,29 +506,38 @@ jobject toJavaArray(JNIEnv* env, std::list<int16_t> objs) {
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::vector<int16_t> objs) {
+jobject int16VectorToJavaArray(JNIEnv* env, std::vector<int16_t> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jshortArray, NewShortArray, {
         env->SetShortArrayRegion(array, 0, size, objs.data());
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::list<int32_t> objs) {
+jobject int32ListToJavaArray(JNIEnv* env, std::list<int32_t> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jintArray, NewIntArray, {
-        LIST_TO_ARRAY(int32_t, size, objs);
+        LIST_TO_ARRAY(jint, size, objs);
         env->SetIntArrayRegion(array, 0, size, typeArr);
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::vector<int32_t> objs) {
+jobject int32VectorToJavaArray(JNIEnv* env, std::vector<int32_t> objs) {
+
+#ifdef _WIN32
+    #define SET_INT_ARRAY_REGION \
+        VECTOR_TO_ARRAY(jint, size, objs);\
+        env->SetIntArrayRegion(array, 0, size, typeArr);
+#else
+    #define SET_INT_ARRAY_REGION env->SetIntArrayRegion(array, 0, size, objs.data())
+#endif
+
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jintArray, NewIntArray, {
-        env->SetIntArrayRegion(array, 0, size, objs.data());
+        SET_INT_ARRAY_REGION;
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::list<int64_t> objs) {
+jobject int64ListToJavaArray(JNIEnv* env, std::list<int64_t> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jlongArray, NewLongArray, {
         LIST_TO_ARRAY(int64_t, size, objs);
@@ -482,14 +545,14 @@ jobject toJavaArray(JNIEnv* env, std::list<int64_t> objs) {
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::vector<int64_t> objs) {
+jobject int64VectorToJavaArray(JNIEnv* env, std::vector<int64_t> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jlongArray, NewLongArray, {
         env->SetLongArrayRegion(array, 0, size, objs.data());
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::list<float> objs) {
+jobject floatListToJavaArray(JNIEnv* env, std::list<float> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jfloatArray, NewFloatArray, {
         LIST_TO_ARRAY(float, size, objs);
@@ -497,14 +560,14 @@ jobject toJavaArray(JNIEnv* env, std::list<float> objs) {
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::vector<float> objs) {
+jobject floatVectorToJavaArray(JNIEnv* env, std::vector<float> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jfloatArray, NewFloatArray, {
         env->SetFloatArrayRegion(array, 0, size, objs.data());
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::list<double> objs) {
+jobject doubleListToJavaArray(JNIEnv* env, std::list<double> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jdoubleArray, NewDoubleArray, {
         LIST_TO_ARRAY(double, size, objs);
@@ -512,7 +575,7 @@ jobject toJavaArray(JNIEnv* env, std::list<double> objs) {
     });
 }
 
-jobject toJavaArray(JNIEnv* env, std::vector<double> objs) {
+jobject doubleVectorToJavaArray(JNIEnv* env, std::vector<double> objs) {
     size_t size = objs.size();
     TO_JAVA_ARRAY_CUSTOM(env, size, jdoubleArray, NewDoubleArray, {
         env->SetDoubleArrayRegion(array, 0, size, objs.data());
@@ -576,30 +639,30 @@ bool cppParams2JavaParams(
                 // object array
                 else if (param.type() == typeid(std::list<JObject>)) {
                     DEBUG << "[jni bridge] cast toJObject List\n";
-                    javaParam = toJavaArray(env, std::any_cast<std::list<JObject>>(param));
+                    javaParam = wrapperObjectListToJavaArray(env, std::any_cast<std::list<JObject>>(param));
                 } else if (param.type() == typeid(std::vector<JObject>)) {
                     DEBUG << "[jni bridge] cast toJObject Vector\n";
-                    javaParam = toJavaArray(env, std::any_cast<std::vector<JObject>>(param));
+                    javaParam = wrapperObjectVectorToJavaArray(env, std::any_cast<std::vector<JObject>>(param));
                 } else if (param.type() == typeid(std::list<jobject>)) {
                     DEBUG << "[jni bridge] cast tojobject List\n";
-                    javaParam = toJavaArray(env, std::any_cast<std::list<jobject>>(param));
+                    javaParam = jobjectListToJavaArray(env, std::any_cast<std::list<jobject>>(param));
                 } else if (param.type() == typeid(std::vector<jobject>)) {
                     DEBUG << "[jni bridge] cast tojobject Vector\n";
-                    javaParam = toJavaArray(env, std::any_cast<std::vector<jobject>>(param));
+                    javaParam = jobjectVectorToJavaArray(env, std::any_cast<std::vector<jobject>>(param));
                 } 
                 // string arrays
                 else if (param.type() == typeid(std::vector<std::string>)) {
                     DEBUG << "[jni bridge] cast tostd::string vector\n";
-                    javaParam = toJavaArray(env, std::any_cast<std::vector<std::string>>(param), localParamRefs);
+                    javaParam = stringVectorToJavaArray(env, std::any_cast<std::vector<std::string>>(param), localParamRefs);
                 } else if (param.type() == typeid(std::list<std::string>)) {
                     DEBUG << "[jni bridge] cast tostd::string list\n";
-                    javaParam = toJavaArray(env, std::any_cast<std::list<std::string>>(param), localParamRefs);
+                    javaParam = stringListToJavaArray(env, std::any_cast<std::list<std::string>>(param), localParamRefs);
                 } else if (param.type() == typeid(std::vector<const char *>)) {
                     DEBUG << "[jni bridge] cast toconst char* vector\n";
-                    javaParam = toJavaArray(env, std::any_cast<std::vector<const char *>>(param), localParamRefs);
+                    javaParam = cstringVectorToJavaArray(env, std::any_cast<std::vector<const char *>>(param), localParamRefs);
                 } else if (param.type() == typeid(std::list<const char *>)) {
                     DEBUG << "[jni bridge] cast toconst char* list\n";
-                    javaParam = toJavaArray(env, std::any_cast<std::list<const char *>>(param), localParamRefs);
+                    javaParam = cstringListToJavaArray(env, std::any_cast<std::list<const char *>>(param), localParamRefs);
                 }
                 //  strings
                 else if (param.type() == typeid(std::string)) {
@@ -629,44 +692,44 @@ bool cppParams2JavaParams(
                 }
                 // other arrays
                 else if (param.type() == typeid(std::list<int32_t>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::list<int32_t>>(param));
+                    javaParam = int32ListToJavaArray(env, std::any_cast<std::list<int32_t>>(param));
                 } else if (param.type() == typeid(std::vector<int32_t>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::vector<int32_t>>(param));
+                    javaParam = int32VectorToJavaArray(env, std::any_cast<std::vector<int32_t>>(param));
                 } 
                 else if (param.type() == typeid(std::list<int64_t>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::list<int64_t>>(param));
+                    javaParam = int64ListToJavaArray(env, std::any_cast<std::list<int64_t>>(param));
                 } else if (param.type() == typeid(std::vector<int64_t>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::vector<int64_t>>(param));
+                    javaParam = int64VectorToJavaArray(env, std::any_cast<std::vector<int64_t>>(param));
                 } 
                 else if (param.type() == typeid(std::list<bool>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::list<bool>>(param));
+                    javaParam = boolListToJavaArray(env, std::any_cast<std::list<bool>>(param));
                 } else if (param.type() == typeid(std::vector<bool>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::vector<bool>>(param));
+                    javaParam = boolVectorToJavaArray(env, std::any_cast<std::vector<bool>>(param));
                 } 
                 else if (param.type() == typeid(std::list<int8_t>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::list<int8_t>>(param));
+                    javaParam = int8ListToJavaArray(env, std::any_cast<std::list<int8_t>>(param));
                 } else if (param.type() == typeid(std::vector<int8_t>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::vector<int8_t>>(param));
+                    javaParam = int8VectorToJavaArray(env, std::any_cast<std::vector<int8_t>>(param));
                 } 
                 else if (param.type() == typeid(std::list<double>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::list<double>>(param));
+                    javaParam = doubleListToJavaArray(env, std::any_cast<std::list<double>>(param));
                 } else if (param.type() == typeid(std::vector<double>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::vector<double>>(param));
+                    javaParam = doubleVectorToJavaArray(env, std::any_cast<std::vector<double>>(param));
                 } 
                 else if (param.type() == typeid(std::list<float>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::list<float>>(param));
+                    javaParam = floatListToJavaArray(env, std::any_cast<std::list<float>>(param));
                 } else if (param.type() == typeid(std::vector<float>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::vector<float>>(param));
+                    javaParam = floatVectorToJavaArray(env, std::any_cast<std::vector<float>>(param));
                 } 
                 else if (param.type() == typeid(std::list<int16_t>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::list<int16_t>>(param));
+                    javaParam = int16ListToJavaArray(env, std::any_cast<std::list<int16_t>>(param));
                 } else if (param.type() == typeid(std::vector<int16_t>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::vector<int16_t>>(param));
+                    javaParam = int16VectorToJavaArray(env, std::any_cast<std::vector<int16_t>>(param));
                 } 
                 else if (param.type() == typeid(std::list<char16_t>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::list<char16_t>>(param));
+                    javaParam = charListToJavaArray(env, std::any_cast<std::list<char16_t>>(param));
                 } else if (param.type() == typeid(std::vector<char16_t>)) {
-                    javaParam = toJavaArray(env, std::any_cast<std::vector<char16_t>>(param));
+                    javaParam = charVectorToJavaArray(env, std::any_cast<std::vector<char16_t>>(param));
                 }
 
                 if (nullptr != javaParam) {
@@ -723,7 +786,7 @@ bool javaHasField(JNIEnv* env, jobject instance, std::string fieldName) {
     return result;
 }
 
-std::shared_ptr<JObject> javaCallMethod(JNIEnv* env, jobject instance, std::string methodName, std::list<std::any>& params) {
+jobject javaCallMethod(JNIEnv* env, jobject instance, std::string methodName, std::list<std::any>& params) {
     size_t paramCount = params.size();
     size_t idx = 0;
 
@@ -735,7 +798,7 @@ std::shared_ptr<JObject> javaCallMethod(JNIEnv* env, jobject instance, std::stri
         }
     }
     if (nullptr == env) {
-        env = getJNIEnv();
+        env = getCurrentJNIEnv();
     }
     if (nullptr == env) {
         return nullptr;
@@ -774,7 +837,7 @@ std::shared_ptr<JObject> javaCallMethod(JNIEnv* env, jobject instance, std::stri
         localParamRefs.pop_front();
     }
     destroyJNIEnv();
-    return result == nullptr ? nullptr : std::make_shared<JObject>(result);
+    return result;
 }
 
 #endif // __JNI_BRIDGE_H

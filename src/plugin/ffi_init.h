@@ -21,19 +21,15 @@ extern "C" {
 #endif
 
 FFI_BRIDGE_API
-void onEnable(void *jniEnv, struct LuaBukkit luaBukkit);
+void onEnable(struct LuaBukkit luaBukkit);
 
 FFI_BRIDGE_API
-void onDisable(void *jniEnv);
+void onDisable();
 
 #ifdef __cplusplus
 }
 #endif
 
 _LuaBukkit* getLuaBukkit();
-
-JNIEnv* getJNIEnv();
-
-void destroyJNIEnv();
 
 #endif // __FFI_INIT_H
