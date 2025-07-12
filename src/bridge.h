@@ -1,22 +1,22 @@
-#ifndef __BRIDGE_H
-#define __BRIDGE_H
-
 #include <jni.h>
 #include <list>
 #include <string>
 #include <any>
 #include "config.h"
 
+#ifndef __BRIDGE_H
+#define __BRIDGE_H
+
 struct JObject;
 struct JObjectProxy;
 
-enum JObjectProxyType {
+enum JNI_BRIDGE_API JObjectProxyType {
     Field,
     Method,
     Constructor
 };
 
-class JObject {
+class JNI_BRIDGE_API JObject {
 public:
     const jobject instance;
 public:
@@ -30,7 +30,7 @@ public:
     std::string operator+(JObject obj);
 };
 
-class JObjectProxy {
+class JNI_BRIDGE_API JObjectProxy {
 private:
     const jobject instance;
     const JObjectProxyType proxyType;

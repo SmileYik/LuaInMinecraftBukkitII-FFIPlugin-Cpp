@@ -1,7 +1,7 @@
+#include <jni.h>
+
 #ifndef __FFI_TYPE_H
 #define __FFI_TYPE_H
-
-#include <jni.h>
 
 typedef struct LuaBukkit LuaBukkit;
 typedef struct _LuaBukkit _LuaBukkit;

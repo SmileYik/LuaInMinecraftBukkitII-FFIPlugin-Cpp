@@ -1,7 +1,7 @@
+#include "ffi_type.h"
+
 #ifndef __PLUGIN_H
 #define __PLUGIN_H
-
-#include "ffi_type.h"
 
 void onPluginEnable(_LuaBukkit* luaBukkit);
 

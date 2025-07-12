@@ -3,11 +3,11 @@
 #include "jni_bridge.h"
 
 JObjectProxy::JObjectProxy(jobject obj, 
-                           JObjectProxyType pxyType, 
-                           const std::string& calledName) : 
-                           instance(obj),
-                           proxyType(pxyType),
-                           name(calledName) {
+                            JObjectProxyType pxyType, 
+                            const std::string& calledName) : 
+                            instance(obj),
+                            proxyType(pxyType),
+                            name(calledName) {
     
 }
 

@@ -96,7 +96,7 @@
 
 // --- JNIEnv 操作 ---
 
-static JavaVM* javaVM;
+static JavaVM* javaVM = nullptr;
 
 void initJNIEnv(JNIEnv* env) {
     if (JNI_OK != env->GetJavaVM(&javaVM)) {

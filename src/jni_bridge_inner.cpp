@@ -6,9 +6,7 @@
  * Method:    initJNIBridge
  * Signature: ()V
  */
-JNIEXPORT jint JNICALL Java_org_eu_smileyik_luaInMinecraftBukkitII_jniBridge_JNIBridge_init(JNIEnv* env, jclass obj) {
-    printf("initJNIENV\n");
-    fflush(stdout);
+JNIEXPORT 
+void JNICALL Java_org_eu_smileyik_luaInMinecraftBukkitII_jniBridge_JNIBridge_initBridge(JNIEnv* env, jclass obj) {
     initJNIEnv(env);
-    return 1;
 }

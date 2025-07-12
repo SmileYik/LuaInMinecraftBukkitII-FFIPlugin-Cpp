@@ -1,9 +1,7 @@
-#ifndef __JNI_BRIDGE_DATA_H
-#define __JNI_BRIDGE_DATA_H
-
 #include <jni.h>
 
-#define TARGET_JNI_VERSION JNI_VERSION_1_8
+#ifndef __JNI_BRIDGE_DATA_H
+#define __JNI_BRIDGE_DATA_H
 
 void initJNIEnv(JNIEnv* env);
 

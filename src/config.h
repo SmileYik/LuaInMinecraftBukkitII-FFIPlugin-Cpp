@@ -2,14 +2,16 @@
 #define __CONFIG_H
 
 #ifdef _WIN32
-    #define FFI_BRIDGE_API __declspec(dllexport)
-    // #ifdef MY_LIBRARY_EXPORTS
-    //     #define FFI_BRIDGE_API __declspec(dllexport)
-    // #else
-    //     #define FFI_BRIDGE_API __declspec(dllimport)
-    // #endif
+    #ifdef JNI_BRIDGE_EXPORTS
+        #define JNI_BRIDGE_API __declspec(dllexport)
+    #else
+        #define JNI_BRIDGE_API __declspec(dllimport)
+    #endif
 #else
-    #define FFI_BRIDGE_API extern
+    #define JNI_BRIDGE_API
 #endif
+
+// target jni version
+#define TARGET_JNI_VERSION JNI_VERSION_1_8
 
 #endif // __CONFIG_H
